@@ -1,0 +1,12 @@
+# Installed on top of the apache/airflow base image (which already ships Airflow itself).
+pandas==2.2.2
+numpy==1.26.4
+scikit-learn==1.5.1
+sqlalchemy>=1.4.36,<2.0  # capped by the apache/airflow:2.9.3 base image's own constraint
+psycopg2-binary==2.9.9
+mlflow==2.14.3
+requests==2.32.3
+pyyaml==6.0.1
+python-dotenv==1.0.1
+pydantic==2.8.2
+pyarrow==17.0.0

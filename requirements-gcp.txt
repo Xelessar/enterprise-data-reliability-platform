@@ -1,0 +1,9 @@
+# Optional Google Cloud connectors (etl/load.py::load_to_bigquery and future
+# GCS/BigQuery source connectors). Installed separately from requirements.txt
+# because resolving google-cloud-bigquery's grpc chain alongside Airflow
+# sends pip's resolver into multi-minute backtracking.
+#
+# Install with: pip install -r requirements-gcp.txt
+
+google-cloud-storage==2.18.0
+google-cloud-bigquery==3.25.0

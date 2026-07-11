@@ -1,0 +1,22 @@
+apache-airflow==2.9.3
+pandas==2.2.2
+numpy==1.26.4
+scikit-learn==1.5.1
+sqlalchemy>=1.4.36,<2.0  # capped by apache-airflow==2.9.3's own constraint
+psycopg2-binary==2.9.9
+mlflow==2.14.3
+streamlit==1.37.0
+requests==2.32.3
+pyyaml==6.0.1
+python-dotenv==1.0.1
+pydantic==2.8.2
+plotly==5.23.0
+
+# Google Cloud connectors live in requirements-gcp.txt (optional, installed
+# separately) — google-cloud-bigquery's grpc dependency chain sends pip's
+# resolver into multi-minute backtracking when solved together with Airflow.
+
+# dev / test
+pytest==8.3.2
+pytest-cov==5.0.0
+ruff==0.5.5

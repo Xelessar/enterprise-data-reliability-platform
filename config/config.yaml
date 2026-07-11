@@ -1,0 +1,44 @@
+warehouse:
+  schema: public
+  tables:
+    raw: raw_records
+    processed: processed_records
+    pipeline_runs: pipeline_runs
+    dq_results: dq_results
+    anomalies: ml_anomalies
+
+sources:
+  csv:
+    enabled: true
+    path: ${SOURCE_CSV_DIR}
+  rest_api:
+    enabled: true
+    base_url: ${SOURCE_API_BASE_URL}
+  postgres:
+    enabled: true
+
+validation:
+  required_columns: [id, timestamp, value]
+  null_pct_warn: 5
+  null_pct_fail: 20
+  duplicate_pk_columns: [id]
+  outlier_method: iqr
+  outlier_iqr_multiplier: 1.5
+  dq_score_fail_threshold: 70
+
+ml:
+  anomaly_detection:
+    algorithm: isolation_forest
+    contamination: 0.05
+    features: [value, row_count, null_pct]
+  mlflow:
+    experiment_name: data-reliability-anomaly-detection
+
+monitoring:
+  volume_anomaly_pct_threshold: 50
+  retry:
+    max_retries: 2
+    retry_delay_seconds: 60
+
+alerting:
+  channels: [log, email]
