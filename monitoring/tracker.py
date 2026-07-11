@@ -10,6 +10,7 @@ import json
 from datetime import datetime, timezone
 from typing import Any
 
+import pandas as pd
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
@@ -63,12 +64,60 @@ class PipelineRunTracker:
                 {"score": report.dq_score, "rows": report.row_count, "id": pipeline_run_id},
             )
 
-    def record_anomalies(self, pipeline_run_id: int, anomaly_count: int) -> None:
+    def record_anomalies(
+        self, pipeline_run_id: int, scored_df: pd.DataFrame, mlflow_run_id: str | None = None
+    ) -> int:
+        """Persist per-record anomaly detail (not just a count) so the dashboard
+        can show *which* records need review, not just how many."""
+        flagged = scored_df[scored_df["is_anomaly"]]
         with self.engine.begin() as conn:
             conn.execute(
                 text("UPDATE pipeline_runs SET anomaly_count = :count WHERE id = :id"),
-                {"count": anomaly_count, "id": pipeline_run_id},
+                {"count": len(flagged), "id": pipeline_run_id},
             )
+            for _, row in flagged.iterrows():
+                conn.execute(
+                    text(
+                        """
+                        INSERT INTO ml_anomalies
+                            (pipeline_run_id, record_id, anomaly_score, is_anomaly,
+                             reason, severity, mlflow_run_id)
+                        VALUES (:pipeline_run_id, :record_id, :anomaly_score, TRUE,
+                                :reason, :severity, :mlflow_run_id)
+                        """
+                    ),
+                    {
+                        "pipeline_run_id": pipeline_run_id,
+                        "record_id": str(row["id"]),
+                        "anomaly_score": float(row["anomaly_score"]),
+                        "reason": row.get("anomaly_reason"),
+                        "severity": row.get("anomaly_severity"),
+                        "mlflow_run_id": mlflow_run_id,
+                    },
+                )
+        return len(flagged)
+
+    def anomalies_for_run(self, pipeline_run_id: int) -> list[dict[str, Any]]:
+        """Flagged records for a run, enriched with their actual value/timestamp
+        by joining back to processed_records on the shared source id."""
+        with self.engine.connect() as conn:
+            rows = conn.execute(
+                text(
+                    """
+                    SELECT a.record_id, a.anomaly_score, a.reason, a.severity,
+                           a.mlflow_run_id, a.detected_at,
+                           p."timestamp" AS record_timestamp, p.value AS record_value
+                    FROM ml_anomalies a
+                    LEFT JOIN processed_records p
+                        ON p.pipeline_run_id = a.pipeline_run_id
+                       AND p.id::text = a.record_id
+                    WHERE a.pipeline_run_id = :id
+                    ORDER BY a.anomaly_score ASC
+                    """
+                ),
+                {"id": pipeline_run_id},
+            ).mappings().all()
+            return [dict(r) for r in rows]
 
     def complete_run(
         self, pipeline_run_id: int, status: str, rca_summary: str | None = None

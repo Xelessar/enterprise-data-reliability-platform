@@ -29,6 +29,7 @@ from etl.extract import ExtractionError, extract  # noqa: E402
 from etl.load import load_to_postgres  # noqa: E402
 from etl.transform import transform  # noqa: E402
 from ml.anomaly_detection import run_anomaly_detection  # noqa: E402
+from monitoring.alerts import send_slack_alert  # noqa: E402
 from monitoring.rca import analyze as rca_analyze  # noqa: E402
 from monitoring.tracker import PipelineRunTracker  # noqa: E402
 from validation.engine import DataValidationEngine  # noqa: E402
@@ -158,7 +159,7 @@ def run_ml_model(**context) -> str:
 
     pipeline_run_id = ti.xcom_pull(key="pipeline_run_id", task_ids="extract_data")
     tracker = _tracker()
-    tracker.record_anomalies(pipeline_run_id, result.anomaly_count)
+    tracker.record_anomalies(pipeline_run_id, result.scored_df, mlflow_run_id=result.mlflow_run_id)
 
     path = _parquet_path(run_id, "scored")
     result.scored_df.to_parquet(path)
@@ -178,13 +179,22 @@ def generate_report(**context) -> None:
 def send_alert(**context) -> None:
     """Success-path notification. Failures are handled by on_pipeline_failure below."""
     ti = context["ti"]
+    dag_id = context["dag"].dag_id
+    run_id = context["run_id"]
     anomaly_count = ti.xcom_pull(key="anomaly_count", task_ids="run_ml_model")
-    logger.info("ALERT[info]: pipeline succeeded, %s anomalies detected", anomaly_count)
-    # Wire a real channel here (Slack webhook / SMTP) once ALERT_EMAIL_TO / SLACK_WEBHOOK_URL are set.
+    dashboard_url = os.environ.get("DASHBOARD_URL", "http://localhost:8501")
+    message = (
+        f":white_check_mark: *{dag_id}* succeeded (`{run_id}`)\n"
+        f"{anomaly_count} anomalies detected — <{dashboard_url}|view in the dashboard>."
+    )
+    logger.info("ALERT[info]: %s", message)
+    send_slack_alert(message, os.environ.get("SLACK_WEBHOOK_URL"))
 
 
 def on_pipeline_failure(context) -> None:
     ti = context["ti"]
+    dag_id = context["dag"].dag_id
+    run_id = context["run_id"]
     exception = context.get("exception")
 
     pipeline_run_id = ti.xcom_pull(key="pipeline_run_id", task_ids="extract_data")
@@ -195,6 +205,11 @@ def on_pipeline_failure(context) -> None:
         rca_summary = rca.summary
 
     logger.error("ALERT[failure]: %s", rca_summary)
+    dashboard_url = os.environ.get("DASHBOARD_URL", "http://localhost:8501")
+    message = (
+        f":x: *{dag_id}* failed (`{run_id}`)\n```{rca_summary}```\n<{dashboard_url}|view in the dashboard>"
+    )
+    send_slack_alert(message, os.environ.get("SLACK_WEBHOOK_URL"))
 
     if pipeline_run_id is not None:
         tracker = _tracker()

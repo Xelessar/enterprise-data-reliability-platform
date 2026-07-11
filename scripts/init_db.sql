@@ -36,6 +36,8 @@ CREATE TABLE IF NOT EXISTS ml_anomalies (
     record_id       TEXT,
     anomaly_score   NUMERIC,
     is_anomaly      BOOLEAN NOT NULL,
+    reason          TEXT,   -- human-readable "why" (largest-deviation feature)
+    severity        TEXT,   -- critical | high | medium
     mlflow_run_id   TEXT,
     detected_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );

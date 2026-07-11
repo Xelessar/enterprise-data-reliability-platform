@@ -16,6 +16,7 @@ x-airflow-env: &airflow-env
   SOURCE_CSV_DIR: /opt/airflow/data/raw
   SOURCE_API_BASE_URL: ${SOURCE_API_BASE_URL}
   SOURCE_API_KEY: ${SOURCE_API_KEY}
+  SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL}
 
 x-airflow-volumes: &airflow-volumes
   - ./airflow/dags:/opt/airflow/airflow/dags

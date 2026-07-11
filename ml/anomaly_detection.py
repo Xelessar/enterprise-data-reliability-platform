@@ -26,6 +26,29 @@ class AnomalyDetectionResult:
     mlflow_run_id: str
 
 
+_SEVERITY_ACTIONS = {
+    "critical": "Immediate review — likely data entry error, sensor fault, or a genuine critical event",
+    "high": "Review before this record is used in downstream reports or models",
+    "medium": "Monitor — may be natural variation, but worth a second look",
+}
+
+
+def _explain_row(row: pd.Series, feature_means: pd.Series, feature_stds: pd.Series) -> tuple[str, str]:
+    """Isolation Forest gives no per-feature attribution, so we approximate
+    'why' with the feature contributing the largest z-score deviation —
+    good enough to turn a bare score into something a reviewer can act on.
+    """
+    z_scores = (row - feature_means) / feature_stds
+    worst_feature = z_scores.abs().idxmax()
+    z = z_scores[worst_feature]
+    severity = "critical" if abs(z) >= 3 else "high" if abs(z) >= 2 else "medium"
+    reason = (
+        f"{worst_feature}={row[worst_feature]:.2f} is {abs(z):.1f} std devs from the "
+        f"population mean ({feature_means[worst_feature]:.2f})"
+    )
+    return reason, severity
+
+
 def _build_model(algorithm: str, contamination: float):
     if algorithm == "isolation_forest":
         return IsolationForest(contamination=contamination, random_state=42, n_estimators=200)
@@ -69,6 +92,12 @@ def run_anomaly_detection(
         scored_df = df.copy()
         scored_df["anomaly_score"] = scores
         scored_df["is_anomaly"] = predictions == -1
+
+        feature_means = features.mean()
+        feature_stds = features.std().replace(0, 1)
+        explanations = features.apply(lambda row: _explain_row(row, feature_means, feature_stds), axis=1)
+        scored_df["anomaly_reason"] = [e[0] for e in explanations]
+        scored_df["anomaly_severity"] = [e[1] for e in explanations]
 
         anomaly_count = int(scored_df["is_anomaly"].sum())
         anomaly_ratio = round(anomaly_count / len(scored_df), 4) if len(scored_df) else 0.0
