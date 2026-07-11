@@ -63,7 +63,7 @@ Reason:
 See `monitoring/rca.py`. It's consumed by the DAG's `on_failure_callback`
 and rendered per-run in the Streamlit dashboard.
 
-## What's implemented today
+## What's implemented
 
 - **ETL**: CSV / REST API / PostgreSQL extractors (`etl/extract.py`), reusable transform pipeline, Postgres loader (BigQuery loader stubbed, not yet wired up — see Roadmap)
 - **Data Quality Score**: 7 configurable checks reduced to a single 0–100 score (see below)
