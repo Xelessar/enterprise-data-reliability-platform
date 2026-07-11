@@ -43,7 +43,7 @@ CSV / REST API / PostgreSQL
   Monitoring store + Streamlit dashboard (monitoring/tracker.py, dashboard/)
         │
         ▼
-  Alerting  (send_alert task; Slack/email wiring pending)
+  Slack alerting on success/failure  (monitoring/alerts.py)
 ```
 
 ## What makes a run "fail loud, not silent": Root Cause Analysis
@@ -62,6 +62,17 @@ Reason:
 
 See `monitoring/rca.py`. It's consumed by the DAG's `on_failure_callback`
 and rendered per-run in the Streamlit dashboard.
+
+## What's implemented today
+
+- **ETL**: CSV / REST API / PostgreSQL extractors (`etl/extract.py`), reusable transform pipeline, Postgres loader (BigQuery loader stubbed, not yet wired up — see Roadmap)
+- **Data Quality Score**: 7 configurable checks reduced to a single 0–100 score (see below)
+- **Root Cause Analysis**: ranked, human-readable failure causes instead of stack traces
+- **Anomaly detection**: Isolation Forest, MLflow-tracked (params/metrics/model artifacts), with a per-record human-readable reason and severity tier — not just a bare score
+- **Airflow orchestration**: extract → validate → transform → load → run_ml_model → generate_report → send_alert, with retries and a DAG-level failure callback
+- **Monitoring dashboard** (Streamlit): DQ score trend, run history, flagged-record drill-down with severity/reason/recommended action, CSV export
+- **Slack alerting**: real Incoming Webhook notifications on both success and failure, linking back to the dashboard
+- **CI**: lint (ruff), unit tests (pytest), Docker image builds (GitHub Actions)
 
 ## Repository layout
 
@@ -111,12 +122,13 @@ Drop a CSV into `data/raw/latest.csv`, then trigger the
 `data_reliability_pipeline` DAG from the Airflow UI (or `airflow dags trigger`
 inside the scheduler container).
 
-**Status note:** this scaffold has been syntax-validated (`docker compose
-config`) and unit-tested logic is included, but the full multi-service stack
-has not yet been run end-to-end in this environment — Docker Desktop's
-engine wasn't running here. Expect to debug on first `docker compose up`
-(typical for a stack this size: Airflow DB init timing, first-run MLflow
-backend migrations, etc.).
+**Status note:** verified end-to-end against a real local run — the DAG
+completes all 7 tasks successfully, MLflow logs a real experiment run with a
+model artifact, anomalies are flagged with reasons in the dashboard, and
+Slack receives a real alert. Getting there required fixing several genuine
+dependency conflicts (pandas/SQLAlchemy/Airflow version pinning, an MLflow
+artifact-store permission mismatch) — see the commit history for details if
+you hit similar issues wiring Airflow + MLflow + pandas 2.x together.
 
 ## Running tests
 
@@ -128,12 +140,21 @@ ruff check .
 
 ## Roadmap
 
-- Kafka streaming ingestion
-- Kubernetes deployment + Terraform IaC
-- Prometheus / Grafana metrics (beyond the Streamlit dashboard)
-- Great Expectations / dbt for declarative validation and transforms
-- Spark for large-volume ETL
-- Vertex AI for managed model serving
-- FastAPI service layer + auth
-- Slack/email alert channels (hooks already present in `send_alert` /
-  `on_pipeline_failure`)
+In priority order — each one builds on what's already working rather than
+starting a parallel track.
+
+1. **GCP migration (BigQuery, Cloud Storage)** — replace/augment the
+   Postgres warehouse with BigQuery; `etl/load.py::load_to_bigquery` is
+   stubbed but not yet wired into the DAG or tested against a real project.
+2. **PDF report generation** — `generate_report` currently only marks the
+   run complete; it should produce an actual report (DQ score, flagged
+   records, RCA) for stakeholders who won't open the dashboard.
+3. **Looker Studio dashboard** — once data lives in BigQuery, connect Looker
+   Studio for a shareable, no-code view alongside the Streamlit one.
+4. **Vertex AI** — managed training/serving for the anomaly detection model
+   instead of local scikit-learn + MLflow.
+5. **Kubernetes deployment** — move off `docker compose` for anything beyond
+   local dev.
+6. Further out: Kafka streaming ingestion, Spark for large-volume ETL, Great
+   Expectations/dbt for declarative validation, email alert channel,
+   FastAPI service layer + auth.
