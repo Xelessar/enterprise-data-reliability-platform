@@ -1,6 +1,12 @@
 # Installed on top of the apache/airflow base image (which already ships Airflow itself).
-pandas==2.2.2
-numpy==1.26.4
+#
+# pandas is pinned to 1.5.x (not the 2.2.2 used elsewhere in this project)
+# because pandas>=2.0's to_sql/read_sql require sqlalchemy>=2.0 to recognize
+# an Engine as SQLAlchemy-connectable; below that it silently falls back to a
+# broken legacy DBAPI2 path ('Engine' object has no attribute 'cursor'').
+# Airflow 2.9.3 hard-pins sqlalchemy<2.0, so pandas has to come down instead.
+pandas==1.5.3
+numpy==1.24.4
 scikit-learn==1.5.1
 sqlalchemy>=1.4.36,<2.0  # capped by the apache/airflow:2.9.3 base image's own constraint
 psycopg2-binary==2.9.9
@@ -9,4 +15,5 @@ requests==2.32.3
 pyyaml==6.0.1
 python-dotenv==1.0.1
 pydantic==2.8.2
-pyarrow==17.0.0
+# pyarrow intentionally unpinned here: mlflow==2.14.3 requires pyarrow<16,
+# and it pulls in a compatible version transitively.

@@ -102,7 +102,7 @@ Services once up:
 
 | Service            | URL                    |
 |---------------------|-------------------------|
-| Airflow webserver    | http://localhost:8080 (admin/admin) |
+| Airflow webserver    | http://localhost:8081 (admin/admin) |
 | MLflow tracking UI   | http://localhost:5000 |
 | Streamlit dashboard  | http://localhost:8501 |
 | PostgreSQL           | localhost:5432 |

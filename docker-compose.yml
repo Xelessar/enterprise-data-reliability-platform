@@ -27,6 +27,10 @@ x-airflow-volumes: &airflow-volumes
   - ./config:/opt/airflow/config
   - ./data:/opt/airflow/data
   - airflow_logs:/opt/airflow/logs
+  # MLflow's local-file artifact store requires the client (this container)
+  # and the mlflow server to see the same path, since artifact writes go
+  # straight to disk rather than through the tracking server's HTTP API.
+  - mlflow_artifacts:/mlflow/artifacts
 
 services:
   postgres:
@@ -51,10 +55,12 @@ services:
     build:
       context: .
       dockerfile: docker/mlflow.Dockerfile
-    command: >
-      mlflow server --host 0.0.0.0 --port 5000
-      --backend-store-uri postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
-      --default-artifact-root /mlflow/artifacts
+    # chmod is required because this container (root) and the Airflow
+    # containers (non-root `airflow` user) share this volume, and MLflow's
+    # local-file artifact store writes directly to disk from both sides.
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - "mkdir -p /mlflow/artifacts && chmod -R 777 /mlflow/artifacts && mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB} --default-artifact-root /mlflow/artifacts"
     ports:
       - "5000:5000"
     volumes:
@@ -73,11 +79,9 @@ services:
     environment:
       <<: *airflow-env
     volumes: *airflow-volumes
-    entrypoint: /bin/bash
-    command: >
-      -c "airflow db migrate &&
-          airflow users create --username admin --password admin
-          --firstname Data --lastname Platform --role Admin --email admin@example.com || true"
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - "airflow db migrate && airflow users create --username admin --password admin --firstname Data --lastname Platform --role Admin --email admin@example.com || true"
 
   airflow-webserver:
     build:
@@ -90,7 +94,7 @@ services:
       <<: *airflow-env
     volumes: *airflow-volumes
     ports:
-      - "8080:8080"
+      - "8081:8080"  # 8080 is taken by another local Airflow stack (airflow-egitim)
     command: webserver
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]

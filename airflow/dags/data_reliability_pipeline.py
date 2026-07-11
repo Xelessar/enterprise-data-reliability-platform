@@ -135,6 +135,7 @@ def load_warehouse(**context) -> None:
 
     transformed_path = ti.xcom_pull(task_ids="transform_data")
     df = pd.read_parquet(transformed_path)
+    df["pipeline_run_id"] = ti.xcom_pull(key="pipeline_run_id", task_ids="extract_data")
 
     engine = _engine()
     table = cfg["warehouse"]["tables"]["processed"]

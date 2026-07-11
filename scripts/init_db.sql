@@ -47,9 +47,17 @@ CREATE TABLE IF NOT EXISTS raw_records (
     ingested_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Columns match the source schema declared in config/config.yaml
+-- (validation.required_columns: id, timestamp, value). `row_id` is the
+-- table's own surrogate key so it never collides with the source `id`,
+-- which is a business key, not guaranteed unique across pipeline runs.
 CREATE TABLE IF NOT EXISTS processed_records (
-    id            BIGSERIAL PRIMARY KEY,
+    row_id          BIGSERIAL PRIMARY KEY,
+    id              BIGINT,
+    "timestamp"     TIMESTAMPTZ,
+    value           NUMERIC,
     pipeline_run_id BIGINT REFERENCES pipeline_runs (id) ON DELETE SET NULL,
-    payload       JSONB,
-    processed_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    processed_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+CREATE INDEX IF NOT EXISTS idx_processed_records_pipeline_run_id ON processed_records (pipeline_run_id);
