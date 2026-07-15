@@ -2,7 +2,7 @@
 
 A production-inspired, cloud-native MLOps platform that ingests, validates,
 orchestrates, and monitors enterprise data pipelines — built to demonstrate
-how large organizations (ING, Google, Microsoft, Amazon, ...) run reliable,
+how large organizations ( Google, Microsoft, Amazon, ...) run reliable,
 automated data workflows, not to ship another ML model.
 
 ## Why this exists
@@ -63,7 +63,7 @@ Reason:
 See `monitoring/rca.py`. It's consumed by the DAG's `on_failure_callback`
 and rendered per-run in the Streamlit dashboard.
 
-## What's implemented today
+## What's implemented
 
 - **ETL**: CSV / REST API / PostgreSQL extractors (`etl/extract.py`), reusable transform pipeline, Postgres loader, optional BigQuery loader wired into the DAG (`etl/load.py::load_to_bigquery`, best-effort secondary sink — see below)
 - **Data Quality Score**: 7 configurable checks reduced to a single 0–100 score (see below)
