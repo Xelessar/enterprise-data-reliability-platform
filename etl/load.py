@@ -19,11 +19,26 @@ def load_to_postgres(
     return len(df)
 
 
-def load_to_bigquery(df: pd.DataFrame, table_id: str, project_id: str, if_exists: str = "append") -> int:
-    """Optional cloud connector. Only imports google-cloud-bigquery when actually called."""
+def load_to_bigquery(
+    df: pd.DataFrame, dataset: str, table: str, project_id: str, if_exists: str = "append"
+) -> int:
+    """Cloud warehouse connector. Only imports google-cloud-bigquery when actually
+    called, since it's an optional dependency (see requirements-gcp.txt)."""
     from google.cloud import bigquery
+    from google.cloud.exceptions import NotFound
 
     client = bigquery.Client(project=project_id)
+
+    dataset_ref = bigquery.DatasetReference(project_id, dataset)
+    try:
+        client.get_dataset(dataset_ref)
+    except NotFound:
+        # First run against a fresh GCP project won't have the dataset yet --
+        # create it rather than requiring a manual `bq mk` step beforehand.
+        client.create_dataset(bigquery.Dataset(dataset_ref))
+        logger.info("Created BigQuery dataset %s.%s", project_id, dataset)
+
+    table_id = f"{project_id}.{dataset}.{table}"
     job_config = bigquery.LoadJobConfig(
         write_disposition="WRITE_APPEND" if if_exists == "append" else "WRITE_TRUNCATE"
     )

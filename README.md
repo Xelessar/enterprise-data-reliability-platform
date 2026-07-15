@@ -65,7 +65,7 @@ and rendered per-run in the Streamlit dashboard.
 
 ## What's implemented today
 
-- **ETL**: CSV / REST API / PostgreSQL extractors (`etl/extract.py`), reusable transform pipeline, Postgres loader (BigQuery loader stubbed, not yet wired up — see Roadmap)
+- **ETL**: CSV / REST API / PostgreSQL extractors (`etl/extract.py`), reusable transform pipeline, Postgres loader, optional BigQuery loader wired into the DAG (`etl/load.py::load_to_bigquery`, best-effort secondary sink — see below)
 - **Data Quality Score**: 7 configurable checks reduced to a single 0–100 score (see below)
 - **Root Cause Analysis**: ranked, human-readable failure causes instead of stack traces
 - **Anomaly detection**: Isolation Forest, MLflow-tracked (params/metrics/model artifacts), with a per-record human-readable reason and severity tier — not just a bare score
@@ -130,6 +130,37 @@ dependency conflicts (pandas/SQLAlchemy/Airflow version pinning, an MLflow
 artifact-store permission mismatch) — see the commit history for details if
 you hit similar issues wiring Airflow + MLflow + pandas 2.x together.
 
+## BigQuery (optional secondary warehouse)
+
+`load_warehouse` always writes to Postgres first; if `GCP_PROJECT_ID` and
+`BIGQUERY_DATASET` are set, it then also loads the same batch into BigQuery
+(`etl/load.py::load_to_bigquery`), auto-creating the dataset on first run. A
+BigQuery failure is logged and swallowed rather than failing the DAG —
+Postgres is the source of truth for every downstream task, so a transient
+GCP auth/quota error shouldn't block the daily run.
+
+To enable it:
+
+1. Create a GCP project and enable the BigQuery API.
+2. Create a service account with **BigQuery Data Editor** + **BigQuery Job
+   User** roles, download its JSON key, and save it as `./secrets/gcp-key.json`
+   (gitignored — never commit this file).
+3. In `.env`, set `GCP_PROJECT_ID`, `BIGQUERY_DATASET`, and
+   `GOOGLE_APPLICATION_CREDENTIALS=1` (any non-empty value — see
+   `docker-compose.yml`'s `airflow-env` anchor for how the actual in-container
+   path is derived).
+4. `docker compose up --build airflow-scheduler airflow-webserver` and
+   trigger the DAG — the `load_warehouse` task logs `Loaded N rows into
+   BigQuery table <project>.<dataset>.<table>` on success.
+
+GCP client libraries are installed only in the Airflow image
+(`requirements-gcp.txt`, layered separately in `docker/airflow.Dockerfile`) —
+mixing `google-cloud-bigquery`'s dependency chain into the shared local
+`.venv` used by mlflow/streamlit forces `protobuf` to a version neither of
+them supports. `tests/test_load.py` covers `load_to_bigquery`'s logic
+(dataset auto-create, table-id construction) against a stubbed
+`google.cloud.bigquery` module instead of the real SDK, for the same reason.
+
 ## Running tests
 
 ```bash
@@ -143,9 +174,9 @@ ruff check .
 In priority order — each one builds on what's already working rather than
 starting a parallel track.
 
-1. **GCP migration (BigQuery, Cloud Storage)** — replace/augment the
-   Postgres warehouse with BigQuery; `etl/load.py::load_to_bigquery` is
-   stubbed but not yet wired into the DAG or tested against a real project.
+1. **Cloud Storage as a raw-data landing zone** — currently only BigQuery is
+   wired up (see above); GCS would replace the local `data/raw/` CSV drop for
+   a fully cloud-native ingestion path.
 2. **PDF report generation** — `generate_report` currently only marks the
    run complete; it should produce an actual report (DQ score, flagged
    records, RCA) for stakeholders who won't open the dashboard.

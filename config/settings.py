@@ -45,3 +45,13 @@ def get_db_url() -> str:
     port = os.environ.get("POSTGRES_PORT", "5432")
     db = os.environ["POSTGRES_DB"]
     return f"postgresql+psycopg2://{user}:{pwd}@{host}:{port}/{db}"
+
+
+def get_bigquery_config() -> dict:
+    """BigQuery is an optional secondary sink (see etl/load.py::load_to_bigquery)
+    -- project_id/dataset are blank until a real GCP project is configured, and
+    callers treat that as "BigQuery load disabled" rather than an error."""
+    return {
+        "project_id": os.environ.get("GCP_PROJECT_ID", ""),
+        "dataset": os.environ.get("BIGQUERY_DATASET", ""),
+    }

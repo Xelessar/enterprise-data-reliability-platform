@@ -17,6 +17,14 @@ x-airflow-env: &airflow-env
   SOURCE_API_BASE_URL: ${SOURCE_API_BASE_URL}
   SOURCE_API_KEY: ${SOURCE_API_KEY}
   SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL}
+  GCP_PROJECT_ID: ${GCP_PROJECT_ID}
+  BIGQUERY_DATASET: ${BIGQUERY_DATASET}
+  # Blank (unset in .env) is a valid, supported state -- see
+  # get_bigquery_config() / load_warehouse's best-effort BigQuery branch.
+  # Path is inside the container -- the actual key file is bind-mounted from
+  # ./secrets/gcp-key.json below, named to match regardless of the host path.
+  GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:+/opt/airflow/secrets/gcp-key.json}
+  GOOGLE_CLOUD_PROJECT: ${GCP_PROJECT_ID}
 
 x-airflow-volumes: &airflow-volumes
   - ./airflow/dags:/opt/airflow/airflow/dags
@@ -27,6 +35,7 @@ x-airflow-volumes: &airflow-volumes
   - ./monitoring:/opt/airflow/monitoring
   - ./config:/opt/airflow/config
   - ./data:/opt/airflow/data
+  - ./secrets:/opt/airflow/secrets:ro
   - airflow_logs:/opt/airflow/logs
   # MLflow's local-file artifact store requires the client (this container)
   # and the mlflow server to see the same path, since artifact writes go

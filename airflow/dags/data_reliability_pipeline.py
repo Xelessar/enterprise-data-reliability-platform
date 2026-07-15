@@ -24,9 +24,9 @@ PROJECT_ROOT = os.environ.get("PROJECT_ROOT", "/opt/airflow")
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-from config.settings import get_config, get_db_url  # noqa: E402
+from config.settings import get_bigquery_config, get_config, get_db_url  # noqa: E402
 from etl.extract import ExtractionError, extract  # noqa: E402
-from etl.load import load_to_postgres  # noqa: E402
+from etl.load import load_to_bigquery, load_to_postgres  # noqa: E402
 from etl.transform import transform  # noqa: E402
 from ml.anomaly_detection import run_anomaly_detection  # noqa: E402
 from monitoring.alerts import send_slack_alert  # noqa: E402
@@ -141,6 +141,19 @@ def load_warehouse(**context) -> None:
     engine = _engine()
     table = cfg["warehouse"]["tables"]["processed"]
     load_to_postgres(df, table_name=table, engine=engine)
+
+    # BigQuery is a secondary, best-effort sink -- Postgres is already the
+    # source of truth for every downstream task (ML reads from parquet), so a
+    # BigQuery hiccup (auth, quota, transient API error) must not fail the
+    # whole daily pipeline run.
+    bq_cfg = get_bigquery_config()
+    if bq_cfg["project_id"] and bq_cfg["dataset"]:
+        try:
+            load_to_bigquery(df, dataset=bq_cfg["dataset"], table=table, project_id=bq_cfg["project_id"])
+        except Exception:
+            logger.exception("BigQuery load failed -- Postgres load already succeeded, continuing")
+    else:
+        logger.info("BigQuery not configured (GCP_PROJECT_ID/BIGQUERY_DATASET unset) -- skipping")
 
 
 def run_ml_model(**context) -> str:
