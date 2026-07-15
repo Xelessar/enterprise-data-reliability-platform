@@ -2,7 +2,7 @@
 
 A production-inspired, cloud-native MLOps platform that ingests, validates,
 orchestrates, and monitors enterprise data pipelines — built to demonstrate
-how large organizations (ING, Google, Microsoft, Amazon, ...) run reliable,
+how large organizations ( Google, Microsoft, Amazon, ...) run reliable,
 automated data workflows, not to ship another ML model.
 
 ## Why this exists
